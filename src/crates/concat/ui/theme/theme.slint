@@ -1,0 +1,183 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-FileCopyrightText: 2026 Jareer Abdullah and Concat contributors
+
+import { Accent } from "accent.slint";
+import { Aurora } from "aurora.slint";
+import { Dark } from "dark.slint";
+import { Light } from "light.slint";
+
+export global Theme {
+    /// 0 = ✨ Aurora, 1 = 🌙 Dark, 2 = ☀️ Light
+    in-out property <int> theme-mode: 0;
+    in-out property <bool> dark: root.theme-mode != 2;
+    out property <bool> is-aurora: root.theme-mode == 0;
+
+    in-out property <int> accent-choice: 0;
+    in-out property <color> accent-custom: #808080;
+    out property <bool> accent-is-custom: accent-choice >= accent-names.length;
+    out property <[string]> accent-names: ["Lime", "Sky", "Violet", "Rose", "Amber", "Mint"];
+    in-out property <color> playhead-custom: #808080;
+    in-out property <int> playhead-choice: 0;
+    out property <bool> playhead-is-custom: playhead-choice >= accent-names.length;
+    in-out property <int> ui-scale: 0;
+
+    // ── type ─────────────────────────────────────────────────────────────
+    out property <string> font: "Hanken Grotesk";
+    out property <string> font-technical: "Hanken Grotesk";
+    out property <length> fs-xs: 10px;
+    out property <length> fs-sm: 11px;
+    out property <length> fs: 12px;
+    out property <length> fs-lg: 13px;
+    out property <length> fs-xl: 14px;
+    out property <length> fs-input: 15px;
+    out property <length> fs-display: 34px;
+
+    out property <int> weight-body: 400;
+    out property <int> weight-title: 500;
+    out property <int> weight-display: 700;
+
+    // ── shape ────────────────────────────────────────────────────────────
+    out property <length> r-xs: 3px;
+    out property <length> r-sm: 5px;
+    out property <length> r: 7px;
+    out property <length> r-lg: 12px;
+    out property <length> r-xl: 16px;
+
+    // metrics
+    out property <length> h: 28px;
+    out property <length> gap: 6px;
+    out property <length> pad: 14px;
+    out property <length> label-w: 62px;
+
+    // ── surfaces ─────────────────────────────────────────────────────────
+    out property <color> panel: theme-mode == 0 ? Aurora.panel : (theme-mode == 1 ? Dark.panel : Light.panel);
+    out property <color> raised: theme-mode == 0 ? Aurora.raised : (theme-mode == 1 ? Dark.raised : Light.raised);
+    out property <color> well: theme-mode == 0 ? Aurora.well : (theme-mode == 1 ? Dark.well : Light.well);
+    out property <color> field: theme-mode == 0 ? Aurora.field : (theme-mode == 1 ? Dark.field : Light.field);
+    out property <color> field-hover: theme-mode == 0 ? Aurora.field-hover : (theme-mode == 1 ? Dark.field-hover : Light.field-hover);
+    out property <color> field-active: theme-mode == 0 ? Aurora.field-active : (theme-mode == 1 ? Dark.field-active : Light.field-active);
+
+    // the launch screen's ladder
+    out property <color> launch-page: theme-mode == 0 ? Aurora.launch-page : (theme-mode == 1 ? Dark.launch-page : Light.launch-page);
+    out property <color> launch-panel: theme-mode == 0 ? Aurora.launch-panel : (theme-mode == 1 ? Dark.launch-panel : Light.launch-panel);
+    out property <color> launch-well: theme-mode == 0 ? Aurora.launch-well : (theme-mode == 1 ? Dark.launch-well : Light.launch-well);
+    out property <color> launch-raised: theme-mode == 0 ? Aurora.launch-raised : (theme-mode == 1 ? Dark.launch-raised : Light.launch-raised);
+    out property <color> launch-field: theme-mode == 0 ? Aurora.launch-field : (theme-mode == 1 ? Dark.launch-field : Light.launch-field);
+    out property <color> launch-field-active:
+        theme-mode == 0 ? Aurora.launch-field-active : (theme-mode == 1 ? Dark.launch-field-active : Light.launch-field-active);
+
+    // hairlines
+    out property <color> line: theme-mode == 0 ? Aurora.line : (theme-mode == 1 ? Dark.line : Light.line);
+    out property <color> line-strong: theme-mode == 0 ? Aurora.line-strong : (theme-mode == 1 ? Dark.line-strong : Light.line-strong);
+
+    // text
+    out property <color> fg: theme-mode == 0 ? Aurora.fg : (theme-mode == 1 ? Dark.fg : Light.fg);
+    out property <color> fg-muted: theme-mode == 0 ? Aurora.fg-muted : (theme-mode == 1 ? Dark.fg-muted : Light.fg-muted);
+    out property <color> fg-dim: theme-mode == 0 ? Aurora.fg-dim : (theme-mode == 1 ? Dark.fg-dim : Light.fg-dim);
+    out property <color> fg-hot: theme-mode == 0 ? Aurora.fg-hot : (theme-mode == 1 ? Dark.fg-hot : Light.fg-hot);
+
+    // accents
+    out property <float> custom-light:
+        (0.299 * accent-custom.red + 0.587 * accent-custom.green + 0.114 * accent-custom.blue) / 255;
+    out property <Accent> custom-tone: {
+        accent: accent-custom,
+        hover: dark ? accent-custom.brighter(0.15) : accent-custom.darker(0.15),
+        soft: accent-custom.with-alpha(dark ? 0.2 : 0.18),
+        on: custom-light > 0.55 ? #16161a : #ffffff,
+    };
+    out property <Accent> tone: accent-is-custom ? custom-tone
+        : theme-mode == 0 ? Aurora.accents[accent-choice]
+        : theme-mode == 1 ? Dark.accents[accent-choice]
+        : Light.accents[accent-choice];
+    out property <color> accent: tone.accent;
+    out property <color> accent-hover: tone.hover;
+    out property <color> accent-soft: tone.soft;
+    out property <color> on-accent: tone.on;
+    out property <color> green: theme-mode == 0 ? Aurora.green : (theme-mode == 1 ? Dark.green : Light.green);
+    out property <color> on-green: theme-mode == 0 ? Aurora.on-green : (theme-mode == 1 ? Dark.on-green : Light.on-green);
+
+    public pure function accent-of(index: int) -> color {
+        return theme-mode == 0 ? Aurora.accents[index].accent
+            : (theme-mode == 1 ? Dark.accents[index].accent : Light.accents[index].accent);
+    }
+
+    // the Rail's dragger
+    out property <color> grip: theme-mode == 0 ? Aurora.grip : (theme-mode == 1 ? Dark.grip : Light.grip);
+    out property <color> grip-active: theme-mode == 0 ? Aurora.grip-active : (theme-mode == 1 ? Dark.grip-active : Light.grip-active);
+    out property <color> grip-edge: theme-mode == 0 ? Aurora.grip-edge : (theme-mode == 1 ? Dark.grip-edge : Light.grip-edge);
+
+    // meter ramp
+    out property <color> meter-low: theme-mode == 0 ? Aurora.meter-low : (theme-mode == 1 ? Dark.meter-low : Light.meter-low);
+    out property <color> meter-mid: theme-mode == 0 ? Aurora.meter-mid : (theme-mode == 1 ? Dark.meter-mid : Light.meter-mid);
+    out property <color> meter-high: theme-mode == 0 ? Aurora.meter-high : (theme-mode == 1 ? Dark.meter-high : Light.meter-high);
+
+    // media kinds
+    out property <color> kind-video: theme-mode == 0 ? Aurora.kind-video : (theme-mode == 1 ? Dark.kind-video : Light.kind-video);
+    out property <color> kind-video-well: theme-mode == 0 ? Aurora.kind-video-well : (theme-mode == 1 ? Dark.kind-video-well : Light.kind-video-well);
+    out property <color> kind-audio: theme-mode == 0 ? Aurora.kind-audio : (theme-mode == 1 ? Dark.kind-audio : Light.kind-audio);
+    out property <color> kind-audio-well: theme-mode == 0 ? Aurora.kind-audio-well : (theme-mode == 1 ? Dark.kind-audio-well : Light.kind-audio-well);
+    out property <color> kind-image: theme-mode == 0 ? Aurora.kind-image : (theme-mode == 1 ? Dark.kind-image : Light.kind-image);
+    out property <color> kind-image-well: theme-mode == 0 ? Aurora.kind-image-well : (theme-mode == 1 ? Dark.kind-image-well : Light.kind-image-well);
+    out property <color> kind-text: theme-mode == 0 ? Aurora.kind-text : (theme-mode == 1 ? Dark.kind-text : Light.kind-text);
+    out property <color> kind-text-well: theme-mode == 0 ? Aurora.kind-text-well : (theme-mode == 1 ? Dark.kind-text-well : Light.kind-text-well);
+    out property <color> kind-filter: theme-mode == 0 ? Aurora.kind-filter : (theme-mode == 1 ? Dark.kind-filter : Light.kind-filter);
+    out property <color> kind-filter-well: theme-mode == 0 ? Aurora.kind-filter-well : (theme-mode == 1 ? Dark.kind-filter-well : Light.kind-filter-well);
+    out property <color> kind-shape: theme-mode == 0 ? Aurora.kind-shape : (theme-mode == 1 ? Dark.kind-shape : Light.kind-shape);
+    out property <color> kind-shape-well: theme-mode == 0 ? Aurora.kind-shape-well : (theme-mode == 1 ? Dark.kind-shape-well : Light.kind-shape-well);
+    out property <color> kind-sound-layer: theme-mode == 0 ? Aurora.kind-sound-layer : (theme-mode == 1 ? Dark.kind-sound-layer : Light.kind-sound-layer);
+    out property <color> kind-sound-layer-well: theme-mode == 0 ? Aurora.kind-sound-layer-well : (theme-mode == 1 ? Dark.kind-sound-layer-well : Light.kind-sound-layer-well);
+
+    // timeline
+    out property <color> lane: theme-mode == 0 ? Aurora.lane : (theme-mode == 1 ? Dark.lane : Light.lane);
+    out property <color> lane-alt: theme-mode == 0 ? Aurora.lane-alt : (theme-mode == 1 ? Dark.lane-alt : Light.lane-alt);
+    out property <color> ruler: theme-mode == 0 ? Aurora.ruler : (theme-mode == 1 ? Dark.ruler : Light.ruler);
+    out property <color> grid: theme-mode == 0 ? Aurora.grid : (theme-mode == 1 ? Dark.grid : Light.grid);
+    out property <color> playhead-default: theme-mode == 0 ? Aurora.playhead : (theme-mode == 1 ? Dark.playhead : Light.playhead);
+    out property <color> playhead: playhead-is-custom ? playhead-custom
+        : playhead-choice <= 0 ? playhead-default
+        : accent-of(playhead-choice);
+    out property <color> wave: theme-mode == 0 ? Aurora.wave : (theme-mode == 1 ? Dark.wave : Light.wave);
+    out property <color> wave-video: theme-mode == 0 ? Aurora.wave-video : (theme-mode == 1 ? Dark.wave-video : Light.wave-video);
+    out property <color> wave-hot: theme-mode == 0 ? Aurora.wave-hot : (theme-mode == 1 ? Dark.wave-hot : Light.wave-hot);
+    out property <float> wave-hot-line: 0.5012;
+
+    // clip ink
+    out property <color> clip-ink: theme-mode == 0 ? Aurora.clip-ink : (theme-mode == 1 ? Dark.clip-ink : Light.clip-ink);
+    out property <color> clip-body: theme-mode == 0 ? Aurora.clip-body : (theme-mode == 1 ? Dark.clip-body : Light.clip-body);
+    out property <color> clip-chip: theme-mode == 0 ? Aurora.clip-chip : (theme-mode == 1 ? Dark.clip-chip : Light.clip-chip);
+    out property <color> wave-centre: theme-mode == 0 ? Aurora.wave-centre : (theme-mode == 1 ? Dark.wave-centre : Light.wave-centre);
+    out property <color> fade-shade: theme-mode == 0 ? Aurora.fade-shade : (theme-mode == 1 ? Dark.fade-shade : Light.fade-shade);
+    out property <color> fade-edge: theme-mode == 0 ? Aurora.fade-edge : (theme-mode == 1 ? Dark.fade-edge : Light.fade-edge);
+    out property <color> transition-in: theme-mode == 0 ? Aurora.transition-in : (theme-mode == 1 ? Dark.transition-in : Light.transition-in);
+    out property <color> transition-out: theme-mode == 0 ? Aurora.transition-out : (theme-mode == 1 ? Dark.transition-out : Light.transition-out);
+
+    // the monitor
+    out property <color> stage: theme-mode == 0 ? Aurora.stage : (theme-mode == 1 ? Dark.stage : Light.stage);
+    out property <color> sample-ground: theme-mode == 0 ? Aurora.sample-ground : (theme-mode == 1 ? Dark.sample-ground : Light.sample-ground);
+    out property <color> on-stage-dim: theme-mode == 0 ? Aurora.on-stage-dim : (theme-mode == 1 ? Dark.on-stage-dim : Light.on-stage-dim);
+
+    // sheets over things that are not panels
+    out property <color> overlay: theme-mode == 0 ? Aurora.overlay : (theme-mode == 1 ? Dark.overlay : Light.overlay);
+    out property <color> scrim: theme-mode == 0 ? Aurora.scrim : (theme-mode == 1 ? Dark.scrim : Light.scrim);
+    out property <color> on-scrim: theme-mode == 0 ? Aurora.on-scrim : (theme-mode == 1 ? Dark.on-scrim : Light.on-scrim);
+
+    // destructive
+    out property <color> danger: theme-mode == 0 ? Aurora.danger : (theme-mode == 1 ? Dark.danger : Light.danger);
+    out property <color> danger-soft: theme-mode == 0 ? Aurora.danger-soft : (theme-mode == 1 ? Dark.danger-soft : Light.danger-soft);
+    out property <color> danger-wash: theme-mode == 0 ? Aurora.danger-wash : (theme-mode == 1 ? Dark.danger-wash : Light.danger-wash);
+    out property <color> danger-edge: theme-mode == 0 ? Aurora.danger-edge : (theme-mode == 1 ? Dark.danger-edge : Light.danger-edge);
+
+    // the window ground the panes float on
+    out property <color> page: theme-mode == 0 ? Aurora.page : (theme-mode == 1 ? Dark.page : Light.page);
+    out property <color> page-fg-muted: theme-mode == 0 ? Aurora.page-fg-muted : (theme-mode == 1 ? Dark.page-fg-muted : Light.page-fg-muted);
+
+    // ── content ──────────────────────────────────────────────────────────
+    out property <[color]> swatches: [
+        #ffffff, #f5f5f7, #a1a1a6, #6e6e73, #15220a, #000000,
+        accent-is-custom ? accent-custom : (theme-mode == 0 ? Aurora.accents[accent-choice].accent : Dark.accents[accent-choice].accent),
+        accent-is-custom ? Dark.accents[0].accent : Light.accents[accent-choice].accent,
+        #30d158, #ffd60a, #f09e2f, #ff453a,
+        #e8355e, #8b5cf6, #4d8df6, #142640,
+    ];
+    out property <color> plate-on: #000000cc;
+}

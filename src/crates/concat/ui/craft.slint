@@ -1,0 +1,1481 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// ArtCraft Suite — Unified Global State, Gemini AI Sidebar, BYOK API Manager & Footer
+
+import { Theme } from "theme/theme.slint";
+import { PaneScroll } from "workspace/pane.slint";
+import { Field } from "primitives/modal.slint";
+
+export struct AiMessageItem {
+    role: string,
+    content: string,
+    has-action: bool,
+    action-summary: string,
+}
+
+export struct AiModelItem {
+    id: string,
+    name: string,
+    provider: string,
+    base-url: string,
+    model-id: string,
+    active: bool,
+}
+
+export global Craft {
+    // 0 = ✨ Aurora, 1 = 🌙 Dark, 2 = ☀️ Light
+    in-out property <int> theme-mode: 0;
+    in-out property <bool> footer-theme-open: false;
+
+    // Top-right Action Bar state
+    in-out property <bool> auto-save: true;
+    in-out property <bool> drive-active: true;
+    in-out property <string> drive-label: "Google Drive: Active (G:)";
+    in-out property <string> drive-tooltip: "Google Drive synchronization active (G:\\My Drive\\Art Craft\\CutCraft)";
+
+    // AI Sidebar & Modal visibility
+    in-out property <bool> ai-open: false;
+    in-out property <bool> api-modal-open: false;
+    in-out property <bool> model-popover-open: false;
+
+    // Models & Chat state
+    in-out property <[AiModelItem]> models: [];
+    in-out property <string> active-model-id: "";
+    in-out property <string> active-model-name: "No API Model";
+    in-out property <[AiMessageItem]> messages: [];
+    in-out property <string> input-text: "";
+    in-out property <bool> is-loading: false;
+    in-out property <string> context-label: "CutCraft Studio · Ready";
+    in-out property <string> status-toast: "";
+
+    // BYOK API Manager form state
+    in-out property <string> editing-model-id: "";
+    in-out property <string> form-provider: "openai";
+    in-out property <string> form-name: "";
+    in-out property <string> form-base-url: "https://api.openai.com/v1";
+    in-out property <string> form-api-key: "";
+    in-out property <string> form-model-id: "gpt-4o";
+    in-out property <bool> show-api-key: false;
+    in-out property <string> test-status: "";
+    in-out property <bool> test-ok: false;
+    in-out property <bool> test-error: false;
+
+    // Callbacks handled in Rust
+    callback select-theme(mode: int);
+    callback toggle-auto-save();
+    callback open-drive-folder();
+    callback toggle-ai();
+
+    callback send-prompt(prompt: string);
+    callback quick-action(action-id: string);
+    callback clear-chat();
+    callback copy-message(text: string);
+    callback insert-message-to-timeline(text: string);
+
+    callback select-model(id: string);
+    callback open-api-modal();
+    callback close-api-modal();
+    callback start-new-model();
+    callback apply-preset(preset-id: string);
+    callback edit-model(id: string);
+    callback delete-model(id: string);
+    callback test-connection();
+    callback save-model();
+}
+
+component QuickCard inherits Rectangle {
+    in property <string> icon;
+    in property <string> title;
+    in property <string> subtitle;
+    callback clicked();
+
+    height: 62px;
+    horizontal-stretch: 1;
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: touch.has-hover ? Theme.accent : Theme.line;
+    background: touch.has-hover ? Theme.field-hover : Theme.raised;
+
+    animate background, border-color { duration: 120ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+    VerticalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        spacing: 3px;
+        alignment: center;
+
+        Text {
+            text: root.icon + "  " + root.title;
+            color: Theme.fg;
+            font-size: 11.5px;
+            font-weight: 600;
+            overflow: elide;
+        }
+
+        Text {
+            text: root.subtitle;
+            color: Theme.fg-muted;
+            font-size: 10px;
+            overflow: elide;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+component MiniChip inherits Rectangle {
+    in property <string> label;
+    callback clicked();
+
+    height: 22px;
+    width: txt.preferred-width + 16px;
+    border-radius: 11px;
+    border-width: 1px;
+    border-color: touch.has-hover ? Theme.accent : Theme.line;
+    background: touch.has-hover ? Theme.field-hover : Theme.raised;
+
+    txt := Text {
+        x: 8px;
+        y: (parent.height - self.height) / 2;
+        text: root.label;
+        color: touch.has-hover ? Theme.fg : Theme.fg-muted;
+        font-size: 10.5px;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+component PresetChip inherits Rectangle {
+    in property <string> label;
+    in property <string> preset-id;
+
+    height: 24px;
+    width: txt.preferred-width + 18px;
+    border-radius: 12px;
+    border-width: 1px;
+    border-color: touch.has-hover ? Theme.accent : Theme.line-strong;
+    background: touch.has-hover ? Theme.field-hover : Theme.field;
+
+    txt := Text {
+        x: 9px;
+        y: (parent.height - self.height) / 2;
+        text: root.label;
+        color: Theme.fg;
+        font-size: 11px;
+        font-weight: 500;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { Craft.apply-preset(root.preset-id); }
+    }
+}
+
+export component AiSidebar inherits Rectangle {
+    width: 365px;
+    background: Theme.panel;
+    clip: true;
+
+    // Left hairline border separating sidebar from editor
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: 1px;
+        height: parent.height;
+        background: Theme.is-aurora ? #a855f755 : Theme.line-strong;
+    }
+
+    // Dismiss model popover when clicking inside the sidebar background
+    if Craft.model-popover-open: TouchArea {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        clicked => { Craft.model-popover-open = false; }
+    }
+
+    VerticalLayout {
+        x: 1px;
+        y: 0;
+        width: parent.width - 1px;
+        height: parent.height;
+        spacing: 0px;
+
+        // ── 1. SLIM HEADER (54px) ─────────────────────────────────────────
+        Rectangle {
+            height: 54px;
+            background: Theme.raised;
+
+            // Bottom hairline
+            Rectangle {
+                y: parent.height - 1px;
+                height: 1px;
+                background: Theme.line;
+            }
+
+            HorizontalLayout {
+                padding-left: 14px;
+                padding-right: 10px;
+                spacing: 6px;
+
+                VerticalLayout {
+                    alignment: center;
+                    horizontal-stretch: 1;
+                    spacing: 2px;
+
+                    Text {
+                        text: "✨ Craft AI";
+                        color: Theme.fg;
+                        font-size: 13.5px;
+                        font-weight: 700;
+                        overflow: elide;
+                    }
+
+                    Text {
+                        text: "Video Cut, Captions & Timeline Director";
+                        color: Theme.fg-muted;
+                        font-size: 10px;
+                        overflow: elide;
+                    }
+                }
+
+                // ⚙ APIs / Keys button
+                VerticalLayout {
+                    alignment: center;
+                    Rectangle {
+                        width: api-lbl.preferred-width + 16px;
+                        height: 26px;
+                        border-radius: 6px;
+                        border-width: 1px;
+                        border-color: api-touch.has-hover ? Theme.accent : Theme.line-strong;
+                        background: api-touch.has-hover ? Theme.field-hover : Theme.field;
+
+                        api-lbl := Text {
+                            x: 8px;
+                            y: (parent.height - self.height) / 2;
+                            text: "⚙ APIs / Keys";
+                            color: Theme.fg;
+                            font-size: 11px;
+                            font-weight: 500;
+                        }
+
+                        api-touch := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => {
+                                Craft.model-popover-open = false;
+                                Craft.open-api-modal();
+                            }
+                        }
+                    }
+                }
+
+                // 🗑 Clear chat button
+                VerticalLayout {
+                    alignment: center;
+                    Rectangle {
+                        width: 26px;
+                        height: 26px;
+                        border-radius: 6px;
+                        background: clr-touch.has-hover ? Theme.field-hover : Colors.transparent;
+
+                        Text {
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                            text: "🗑";
+                            color: clr-touch.has-hover ? Theme.fg : Theme.fg-muted;
+                            font-size: 12px;
+                        }
+
+                        clr-touch := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { Craft.clear-chat(); }
+                        }
+                    }
+                }
+
+                // ✕ Close sidebar button
+                VerticalLayout {
+                    alignment: center;
+                    Rectangle {
+                        width: 26px;
+                        height: 26px;
+                        border-radius: 6px;
+                        background: cls-touch.has-hover ? Theme.danger-soft : Colors.transparent;
+
+                        Text {
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                            text: "✕";
+                            color: cls-touch.has-hover ? Theme.danger : Theme.fg-muted;
+                            font-size: 12px;
+                            font-weight: 700;
+                        }
+
+                        cls-touch := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => {
+                                Craft.model-popover-open = false;
+                                Craft.ai-open = false;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── 2. BODY AREA (Vertically centered empty states OR Chat stream) ──
+        Rectangle {
+            vertical-stretch: 1;
+            clip: true;
+
+            // STATE 1: No API Key / Model configured -> Vertically Centered BYOK Onboarding Card
+            if Craft.models.length == 0: VerticalLayout {
+                width: parent.width;
+                height: parent.height;
+                padding: 18px;
+                alignment: center;
+
+                Rectangle {
+                    border-radius: 14px;
+                    border-width: 1px;
+                    border-color: Theme.is-aurora ? #a855f755 : Theme.line-strong;
+                    background: Theme.raised;
+                    height: onboard-col.preferred-height + 32px;
+
+                    onboard-col := VerticalLayout {
+                        x: 16px;
+                        y: 16px;
+                        width: parent.width - 32px;
+                        spacing: 12px;
+                        alignment: center;
+
+                        Text {
+                            text: "✨ No AI API Connected";
+                            color: Theme.fg;
+                            font-size: 15px;
+                            font-weight: 700;
+                            horizontal-alignment: center;
+                        }
+
+                        Text {
+                            text: "Connect your own API key (Google Gemini, OpenAI, Anthropic, Groq, OpenRouter or local Ollama) to control cuts, titles & filters with AI.";
+                            color: Theme.fg-muted;
+                            font-size: 11.5px;
+                            wrap: word-wrap;
+                            horizontal-alignment: center;
+                        }
+
+                        // Embedded Provider Icons Row
+                        HorizontalLayout {
+                            alignment: center;
+                            spacing: 8px;
+                            height: 28px;
+
+                            for icon-img in [
+                                @image-url("assets/ai_icons/GEMINI_ICON.png"),
+                                @image-url("assets/ai_icons/GPT_ICON.png"),
+                                @image-url("assets/ai_icons/DEEPSEEK_ICON.png"),
+                                @image-url("assets/ai_icons/MISTRAL_ICON.png"),
+                                @image-url("assets/ai_icons/QWEN_ICON.png"),
+                                @image-url("assets/ai_icons/LLAMA_ICON.png"),
+                                @image-url("assets/ai_icons/AI_ICON.png"),
+                            ]: Rectangle {
+                                width: 26px;
+                                height: 26px;
+                                border-radius: 6px;
+                                background: Theme.field;
+                                border-width: 1px;
+                                border-color: Theme.line;
+
+                                Image {
+                                    x: 4px;
+                                    y: 4px;
+                                    width: 18px;
+                                    height: 18px;
+                                    source: icon-img;
+                                    image-fit: contain;
+                                }
+                            }
+                        }
+
+                        // Primary CTA Button
+                        Rectangle {
+                            height: 34px;
+                            border-radius: 8px;
+                            background: add-key-touch.has-hover ? #7c3aed : #6d28d9;
+                            border-width: 1px;
+                            border-color: #a78bfa;
+
+                            Text {
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                                text: "＋ Add API Key / Model";
+                                color: #ffffff;
+                                font-size: 12px;
+                                font-weight: 600;
+                            }
+
+                            add-key-touch := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => { Craft.open-api-modal(); }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // STATE 2: API connected & Chat empty -> Vertically Centered Gemini Hero + 2x2 Quick Grid
+            if Craft.models.length > 0 && Craft.messages.length == 0: VerticalLayout {
+                width: parent.width;
+                height: parent.height;
+                padding: 18px;
+                spacing: 16px;
+                alignment: center;
+
+                VerticalLayout {
+                    spacing: 6px;
+                    alignment: center;
+
+                    HorizontalLayout {
+                        alignment: center;
+                        Rectangle {
+                            width: 48px;
+                            height: 48px;
+                            border-radius: 12px;
+                            background: Theme.is-aurora ? #8b5cf622 : #ffffff0d;
+                            border-width: 1px;
+                            border-color: Theme.is-aurora ? #a855f755 : #ffffff18;
+
+                            Text {
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                                text: "✨";
+                                font-size: 22px;
+                            }
+                        }
+                    }
+
+                    Text {
+                        text: "How can I help you in CutCraft today?";
+                        color: Theme.fg;
+                        font-size: 16px;
+                        font-weight: 700;
+                        wrap: word-wrap;
+                        horizontal-alignment: center;
+                    }
+
+                    Text {
+                        text: "Video Cut, Captions & Timeline Director • Choose a quick action or enter your command below.";
+                        color: Theme.fg-muted;
+                        font-size: 11.5px;
+                        wrap: word-wrap;
+                        horizontal-alignment: center;
+                    }
+                }
+
+                // 2x2 Quick-Action Grid
+                VerticalLayout {
+                    spacing: 8px;
+
+                    HorizontalLayout {
+                        spacing: 8px;
+                        QuickCard {
+                            icon: "🎬";
+                            title: "Title Overlay";
+                            subtitle: "Insert at playhead";
+                            clicked => { Craft.quick-action("add_title"); }
+                        }
+                        QuickCard {
+                            icon: "✂️";
+                            title: "Playhead Split";
+                            subtitle: "Cut active clip";
+                            clicked => { Craft.quick-action("split_playhead"); }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 8px;
+                        QuickCard {
+                            icon: "🎨";
+                            title: "Cinema Filter";
+                            subtitle: "Apply cinematic look";
+                            clicked => { Craft.quick-action("apply_cinema_filter"); }
+                        }
+                        QuickCard {
+                            icon: "📋";
+                            title: "Timeline Analysis";
+                            subtitle: "Inspect tracks & clips";
+                            clicked => { Craft.quick-action("analyze_timeline"); }
+                        }
+                    }
+                }
+            }
+
+            // STATE 3: Active Chat Messages Stream (strictly sized to content, never stretched!)
+            if Craft.models.length > 0 && Craft.messages.length > 0: PaneScroll {
+                width: parent.width;
+                height: parent.height;
+
+                VerticalLayout {
+                    padding: 12px;
+                    spacing: 10px;
+                    alignment: start;
+
+                    for msg in Craft.messages: VerticalLayout {
+                        spacing: 4px;
+                        alignment: start;
+
+                        if msg.role == "user": HorizontalLayout {
+                            alignment: end;
+                            Rectangle {
+                                width: Math.min(300px, usr-txt.preferred-width + 24px);
+                                height: usr-txt.preferred-height + 18px;
+                                border-radius: 12px;
+                                background: Theme.accent;
+
+                                usr-txt := Text {
+                                    x: 12px;
+                                    y: 9px;
+                                    width: parent.width - 24px;
+                                    text: msg.content;
+                                    color: Theme.on-accent;
+                                    font-size: 12px;
+                                    wrap: word-wrap;
+                                }
+                            }
+                        }
+
+                        if msg.role != "user": Rectangle {
+                            width: 336px;
+                            height: bot-col.preferred-height + 20px;
+                            border-radius: 12px;
+                            border-width: 1px;
+                            border-color: msg.has-action ? #22c55e66 : Theme.line;
+                            background: Theme.raised;
+
+                            bot-col := VerticalLayout {
+                                x: 12px;
+                                y: 10px;
+                                width: parent.width - 24px;
+                                spacing: 8px;
+                                alignment: start;
+
+                                HorizontalLayout {
+                                    spacing: 6px;
+                                    Text {
+                                        text: "✨ Craft AI";
+                                        color: Theme.accent;
+                                        font-size: 11px;
+                                        font-weight: 700;
+                                    }
+                                    Rectangle { horizontal-stretch: 1; }
+                                }
+
+                                // Executed MCP Action Pill
+                                if msg.has-action: Rectangle {
+                                    height: 24px;
+                                    border-radius: 6px;
+                                    border-width: 1px;
+                                    border-color: #22c55e66;
+                                    background: #22c55e1f;
+
+                                    Text {
+                                        x: 8px;
+                                        y: (parent.height - self.height) / 2;
+                                        width: parent.width - 16px;
+                                        text: "⚡ " + msg.action-summary;
+                                        color: #4ade80;
+                                        font-size: 10.5px;
+                                        font-weight: 600;
+                                        overflow: elide;
+                                    }
+                                }
+
+                                // Message Content
+                                Text {
+                                    width: parent.width;
+                                    text: msg.content;
+                                    color: Theme.fg;
+                                    font-size: 12px;
+                                    wrap: word-wrap;
+                                }
+
+                                // Message Footer Actions (Copy & Insert as Title on Timeline)
+                                HorizontalLayout {
+                                    alignment: end;
+                                    spacing: 6px;
+
+                                    Rectangle {
+                                        width: ins-lbl.preferred-width + 14px;
+                                        height: 22px;
+                                        border-radius: 5px;
+                                        border-width: 1px;
+                                        border-color: ins-t.has-hover ? Theme.accent : Theme.line;
+                                        background: ins-t.has-hover ? Theme.field-hover : Theme.field;
+
+                                        ins-lbl := Text {
+                                            x: 7px;
+                                            y: (parent.height - self.height) / 2;
+                                            text: "➕ Insert Title on Timeline";
+                                            color: Theme.fg;
+                                            font-size: 10px;
+                                        }
+
+                                        ins-t := TouchArea {
+                                            mouse-cursor: pointer;
+                                            clicked => { Craft.insert-message-to-timeline(msg.content); }
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: cpy-lbl.preferred-width + 14px;
+                                        height: 22px;
+                                        border-radius: 5px;
+                                        border-width: 1px;
+                                        border-color: cpy-t.has-hover ? Theme.accent : Theme.line;
+                                        background: cpy-t.has-hover ? Theme.field-hover : Theme.field;
+
+                                        cpy-lbl := Text {
+                                            x: 7px;
+                                            y: (parent.height - self.height) / 2;
+                                            text: "📋 Copy";
+                                            color: Theme.fg-muted;
+                                            font-size: 10px;
+                                        }
+
+                                        cpy-t := TouchArea {
+                                            mouse-cursor: pointer;
+                                            clicked => { Craft.copy-message(msg.content); }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if Craft.is-loading: Rectangle {
+                        width: 336px;
+                        height: 38px;
+                        border-radius: 10px;
+                        border-width: 1px;
+                        border-color: Theme.accent;
+                        background: Theme.raised;
+
+                        Text {
+                            x: 12px;
+                            y: (parent.height - self.height) / 2;
+                            text: "✨ Craft AI is thinking & executing timeline commands...";
+                            color: Theme.fg-muted;
+                            font-size: 11px;
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── 3. BOTTOM INPUT DOCK ──────────────────────────────────────────
+        Rectangle {
+            height: Craft.messages.length > 0 ? 154px : 124px;
+            background: Theme.raised;
+
+            // Top border hairline
+            Rectangle {
+                y: 0;
+                height: 1px;
+                background: Theme.line;
+            }
+
+            VerticalLayout {
+                padding: 10px;
+                spacing: 6px;
+
+                // Live Context Pill + Status Toast
+                HorizontalLayout {
+                    spacing: 6px;
+                    Rectangle {
+                        height: 20px;
+                        width: Math.min(340px, ctx-txt.preferred-width + 16px);
+                        border-radius: 10px;
+                        background: Theme.well;
+                        border-width: 1px;
+                        border-color: Theme.line;
+
+                        ctx-txt := Text {
+                            x: 8px;
+                            y: (parent.height - self.height) / 2;
+                            width: parent.width - 16px;
+                            text: "● Context: " + Craft.context-label;
+                            color: Theme.fg-muted;
+                            font-size: 10px;
+                            overflow: elide;
+                        }
+                    }
+                }
+
+                // Compact Quick-Action chips when chat has messages
+                if Craft.messages.length > 0: HorizontalLayout {
+                    spacing: 5px;
+                    MiniChip {
+                        label: "🎬 +Title";
+                        clicked => { Craft.quick-action("add_title"); }
+                    }
+                    MiniChip {
+                        label: "✂️ Split";
+                        clicked => { Craft.quick-action("split_playhead"); }
+                    }
+                    MiniChip {
+                        label: "🎨 Cinema";
+                        clicked => { Craft.quick-action("apply_cinema_filter"); }
+                    }
+                    MiniChip {
+                        label: "🎞 +Track";
+                        clicked => { Craft.quick-action("add_track"); }
+                    }
+                    MiniChip {
+                        label: "📋 Analyze";
+                        clicked => { Craft.quick-action("analyze_timeline"); }
+                    }
+                }
+
+                // Rounded Gemini Prompt Box
+                Rectangle {
+                    height: 76px;
+                    border-radius: 12px;
+                    border-width: 1px;
+                    border-color: prompt-input.has-focus ? Theme.accent : Theme.line-strong;
+                    background: Theme.well;
+
+                    VerticalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        padding-top: 8px;
+                        padding-bottom: 6px;
+                        spacing: 6px;
+
+                        // Prompt input row
+                        Rectangle {
+                            height: 28px;
+                            clip: true;
+
+                            prompt-input := TextInput {
+                                width: parent.width;
+                                height: self.preferred-height;
+                                y: (parent.height - self.height) / 2;
+                                text <=> Craft.input-text;
+                                color: Theme.fg;
+                                font-size: 12.5px;
+                                single-line: true;
+                                selection-background-color: Theme.accent;
+                                selection-foreground-color: Theme.on-accent;
+
+                                accepted => {
+                                    if (Craft.input-text != "" && !Craft.is-loading) {
+                                        Craft.send-prompt(Craft.input-text);
+                                    }
+                                }
+                            }
+
+                            if Craft.input-text == "" && !prompt-input.has-focus: Text {
+                                y: (parent.height - self.height) / 2;
+                                text: "Ask Craft AI (e.g. 'Add title WELCOME' or 'Split clip')...";
+                                color: Theme.fg-dim;
+                                font-size: 11.5px;
+                                overflow: elide;
+                            }
+
+                            TouchArea {
+                                mouse-cursor: text;
+                                clicked => { prompt-input.focus(); }
+                            }
+                        }
+
+                        // Bottom bar inside prompt card: Model-Switcher Pill + Round Send Button
+                        HorizontalLayout {
+                            height: 26px;
+                            spacing: 6px;
+
+                            // Model-Switcher Pill
+                            Rectangle {
+                                width: Math.min(245px, mdl-txt.preferred-width + 20px);
+                                height: 24px;
+                                border-radius: 12px;
+                                border-width: 1px;
+                                border-color: mdl-touch.has-hover ? Theme.accent : Theme.line-strong;
+                                background: mdl-touch.has-hover ? Theme.field-hover : Theme.field;
+
+                                mdl-txt := Text {
+                                    x: 10px;
+                                    y: (parent.height - self.height) / 2;
+                                    width: parent.width - 20px;
+                                    text: (Craft.models.length > 0 ? "● " : "⚠ ") + Craft.active-model-name + " ▾";
+                                    color: Craft.models.length > 0 ? Theme.fg : #fb923c;
+                                    font-size: 10.5px;
+                                    font-weight: 500;
+                                    overflow: elide;
+                                }
+
+                                mdl-touch := TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => {
+                                        Craft.model-popover-open = !Craft.model-popover-open;
+                                    }
+                                }
+                            }
+
+                            Rectangle { horizontal-stretch: 1; }
+
+                            // Round Send Button (↑)
+                            Rectangle {
+                                width: 26px;
+                                height: 26px;
+                                border-radius: 13px;
+                                background: (Craft.input-text != "" && !Craft.is-loading)
+                                    ? (send-touch.has-hover ? Theme.accent-hover : Theme.accent)
+                                    : Theme.field;
+
+                                Text {
+                                    x: (parent.width - self.width) / 2;
+                                    y: (parent.height - self.height) / 2 - 1px;
+                                    text: "↑";
+                                    color: (Craft.input-text != "" && !Craft.is-loading) ? Theme.on-accent : Theme.fg-dim;
+                                    font-size: 13px;
+                                    font-weight: 700;
+                                }
+
+                                send-touch := TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => {
+                                        if (Craft.input-text != "" && !Craft.is-loading) {
+                                            Craft.send-prompt(Craft.input-text);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── 4. MODEL-SWITCHER POPOVER (Strictly bounded inside the 365px sidebar!) ──
+    if Craft.model-popover-open: Rectangle {
+        x: 12px;
+        width: 340px;
+        height: popover-col.preferred-height + 16px;
+        y: Math.max(58px, parent.height - (Craft.messages.length > 0 ? 158px : 128px) - self.height);
+        border-radius: 10px;
+        border-width: 1px;
+        border-color: Theme.accent;
+        background: Theme.raised;
+        clip: true;
+
+        popover-col := VerticalLayout {
+            x: 8px;
+            y: 8px;
+            width: parent.width - 16px;
+            spacing: 4px;
+
+            Text {
+                text: "SELECT ACTIVE AI MODEL";
+                color: Theme.fg-dim;
+                font-size: 9.5px;
+                font-weight: 700;
+            }
+
+            for m in Craft.models: Rectangle {
+                height: 28px;
+                border-radius: 6px;
+                background: m.active ? Theme.accent-soft : (row-t.has-hover ? Theme.field-hover : Colors.transparent);
+
+                Text {
+                    x: 8px;
+                    y: (parent.height - self.height) / 2;
+                    width: parent.width - 16px;
+                    text: (m.active ? "✓ " : "   ") + m.name + " (" + m.model-id + ")";
+                    color: m.active ? Theme.accent : Theme.fg;
+                    font-size: 11px;
+                    font-weight: m.active ? 700 : 400;
+                    overflow: elide;
+                }
+
+                row-t := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        Craft.model-popover-open = false;
+                        Craft.select-model(m.id);
+                    }
+                }
+            }
+
+            Rectangle {
+                height: 1px;
+                background: Theme.line;
+            }
+
+            Rectangle {
+                height: 28px;
+                border-radius: 6px;
+                background: mng-t.has-hover ? Theme.field-hover : Colors.transparent;
+
+                Text {
+                    x: 8px;
+                    y: (parent.height - self.height) / 2;
+                    text: "＋ Add New Model / ⚙ Manage APIs...";
+                    color: Theme.accent;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+
+                mng-t := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        Craft.model-popover-open = false;
+                        Craft.open-api-modal();
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── 5. BYOK API-MANAGER MODAL OVERLAY ───────────────────────────────────────
+export component ApiManagerModal inherits Rectangle {
+    visible: Craft.api-modal-open;
+    background: Theme.overlay;
+
+    // Backdrop click closes modal
+    TouchArea {
+        clicked => { Craft.close-api-modal(); }
+    }
+
+    // Dialog surface card
+    Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: Math.min(580px, parent.width - 32px);
+        height: Math.min(620px, parent.height - 32px);
+        border-radius: 14px;
+        border-width: 1px;
+        border-color: Theme.is-aurora ? #a855f766 : Theme.line-strong;
+        background: Theme.panel;
+        clip: true;
+
+        // Prevent backdrop click-through inside dialog card
+        TouchArea {}
+
+        VerticalLayout {
+            width: parent.width;
+            height: parent.height;
+            spacing: 0px;
+
+            // Modal Header
+            Rectangle {
+                height: 50px;
+                background: Theme.raised;
+
+                Rectangle {
+                    y: parent.height - (Theme.is-aurora ? 2px : 1px);
+                    height: Theme.is-aurora ? 2px : 1px;
+                    background: Theme.is-aurora
+                        ? @linear-gradient(90deg, #38bdf8 0%, #4285f4 25%, #a855f7 50%, #ec4899 75%, #fb923c 100%)
+                        : Theme.line;
+                }
+
+                HorizontalLayout {
+                    padding-left: 16px;
+                    padding-right: 12px;
+
+                    VerticalLayout {
+                        alignment: center;
+                        horizontal-stretch: 1;
+                        Text {
+                            text: "⚙ Manage AI APIs & Custom Models (BYOK)";
+                            color: Theme.fg;
+                            font-size: 14px;
+                            font-weight: 700;
+                        }
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+                        Rectangle {
+                            width: 28px;
+                            height: 28px;
+                            border-radius: 6px;
+                            background: m-cls.has-hover ? Theme.danger-soft : Colors.transparent;
+
+                            Text {
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                                text: "✕";
+                                color: m-cls.has-hover ? Theme.danger : Theme.fg-muted;
+                                font-size: 13px;
+                                font-weight: 700;
+                            }
+
+                            m-cls := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => { Craft.close-api-modal(); }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Scrollable Modal Content
+            PaneScroll {
+                vertical-stretch: 1;
+
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 14px;
+
+                    // Section A: Saved Connections
+                    VerticalLayout {
+                        spacing: 6px;
+
+                        HorizontalLayout {
+                            Text {
+                                text: "SAVED CONNECTIONS (" + Craft.models.length + ")";
+                                color: Theme.fg-muted;
+                                font-size: 10.5px;
+                                font-weight: 700;
+                            }
+                            Rectangle { horizontal-stretch: 1; }
+                            if Craft.editing-model-id != "": Rectangle {
+                                width: new-m-txt.preferred-width + 14px;
+                                height: 22px;
+                                border-radius: 5px;
+                                background: Theme.field;
+
+                                new-m-txt := Text {
+                                    x: 7px;
+                                    y: (parent.height - self.height) / 2;
+                                    text: "＋ Create New Connection";
+                                    color: Theme.accent;
+                                    font-size: 10.5px;
+                                }
+
+                                TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => { Craft.start-new-model(); }
+                                }
+                            }
+                        }
+
+                        if Craft.models.length == 0: Rectangle {
+                            height: 44px;
+                            border-radius: 8px;
+                            border-width: 1px;
+                            border-color: Theme.line;
+                            background: Theme.well;
+
+                            Text {
+                                x: 12px;
+                                y: (parent.height - self.height) / 2;
+                                text: "No API connection saved yet. Select a preset below and enter your API key.";
+                                color: Theme.fg-muted;
+                                font-size: 11px;
+                            }
+                        }
+
+                        for item in Craft.models: Rectangle {
+                            height: 58px;
+                            border-radius: 9px;
+                            border-width: 1px;
+                            border-color: item.active ? Theme.accent : Theme.line;
+                            background: item.active ? Theme.accent-soft : Theme.raised;
+
+                            VerticalLayout {
+                                padding-left: 12px;
+                                padding-right: 12px;
+                                padding-top: 7px;
+                                padding-bottom: 7px;
+                                spacing: 4px;
+
+                                // Line 1: Model Name + Active Badge
+                                HorizontalLayout {
+                                    spacing: 8px;
+                                    Text {
+                                        text: item.name;
+                                        color: Theme.fg;
+                                        font-size: 12.5px;
+                                        font-weight: 700;
+                                        overflow: elide;
+                                        horizontal-stretch: 1;
+                                    }
+
+                                    // Activate / Active pill
+                                    Rectangle {
+                                        width: act-lbl.preferred-width + 16px;
+                                        height: 22px;
+                                        border-radius: 6px;
+                                        background: item.active ? Theme.accent : Theme.field;
+
+                                        act-lbl := Text {
+                                            x: 8px;
+                                            y: (parent.height - self.height) / 2;
+                                            text: item.active ? "✓ Active" : "Activate";
+                                            color: item.active ? Theme.on-accent : Theme.fg;
+                                            font-size: 10.5px;
+                                            font-weight: 600;
+                                        }
+
+                                        TouchArea {
+                                            mouse-cursor: pointer;
+                                            clicked => { Craft.select-model(item.id); }
+                                        }
+                                    }
+
+                                    // Edit button
+                                    Rectangle {
+                                        width: 26px;
+                                        height: 22px;
+                                        border-radius: 6px;
+                                        background: ed-t.has-hover ? Theme.field-hover : Theme.field;
+
+                                        Text {
+                                            x: (parent.width - self.width) / 2;
+                                            y: (parent.height - self.height) / 2;
+                                            text: "✏";
+                                            color: Theme.fg;
+                                            font-size: 11px;
+                                        }
+
+                                        ed-t := TouchArea {
+                                            mouse-cursor: pointer;
+                                            clicked => { Craft.edit-model(item.id); }
+                                        }
+                                    }
+
+                                    // Delete button
+                                    Rectangle {
+                                        width: 26px;
+                                        height: 22px;
+                                        border-radius: 6px;
+                                        background: del-t.has-hover ? Theme.danger-soft : Theme.field;
+
+                                        Text {
+                                            x: (parent.width - self.width) / 2;
+                                            y: (parent.height - self.height) / 2;
+                                            text: "🗑";
+                                            color: del-t.has-hover ? Theme.danger : Theme.fg-muted;
+                                            font-size: 11px;
+                                        }
+
+                                        del-t := TouchArea {
+                                            mouse-cursor: pointer;
+                                            clicked => { Craft.delete-model(item.id); }
+                                        }
+                                    }
+                                }
+
+                                // Line 2: Provider + Model ID + Base URL
+                                Text {
+                                    text: item.provider + "  ·  " + item.model-id + "  ·  " + item.base-url;
+                                    color: Theme.fg-muted;
+                                    font-size: 10.5px;
+                                    overflow: elide;
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle { height: 1px; background: Theme.line; }
+
+                    // Section B: Quick Provider Presets (Non-destructive to API key!)
+                    VerticalLayout {
+                        spacing: 6px;
+                        Text {
+                            text: (Craft.editing-model-id != "" ? "EDIT CONNECTION" : "SELECT NEW CONNECTION / PRESET") + " (preserves entered API key)";
+                            color: Theme.fg-muted;
+                            font-size: 10.5px;
+                            font-weight: 700;
+                        }
+
+                        HorizontalLayout {
+                            spacing: 6px;
+                            PresetChip { label: "KI-Konnekt"; preset-id: "kikonnekt"; }
+                            PresetChip { label: "Google Gemini"; preset-id: "gemini"; }
+                            PresetChip { label: "OpenAI"; preset-id: "openai"; }
+                            PresetChip { label: "Anthropic"; preset-id: "anthropic"; }
+                        }
+
+                        HorizontalLayout {
+                            spacing: 6px;
+                            PresetChip { label: "OpenRouter"; preset-id: "openrouter"; }
+                            PresetChip { label: "Groq"; preset-id: "groq"; }
+                            PresetChip { label: "Ollama (Local)"; preset-id: "ollama"; }
+                            PresetChip { label: "Custom API"; preset-id: "custom"; }
+                        }
+                    }
+
+                    // Section C: Connection Form Fields
+                    VerticalLayout {
+                        spacing: 8px;
+
+                        VerticalLayout {
+                            spacing: 3px;
+                            Text { text: "Display Name"; color: Theme.fg-muted; font-size: 11px; }
+                            Field {
+                                value: Craft.form-name;
+                                placeholder: "e.g. Google Gemini 2.5 Flash or KI-Konnekt";
+                                edited(val) => { Craft.form-name = val; }
+                            }
+                        }
+
+                        VerticalLayout {
+                            spacing: 3px;
+                            Text { text: "API Base URL / Endpoint"; color: Theme.fg-muted; font-size: 11px; }
+                            Field {
+                                value: Craft.form-base-url;
+                                placeholder: "https://generativelanguage.googleapis.com/v1beta/openai";
+                                technical: true;
+                                edited(val) => { Craft.form-base-url = val; }
+                            }
+                        }
+
+                        VerticalLayout {
+                            spacing: 3px;
+                            Text { text: "API Key (saved locally in shared_custom_models.json)"; color: Theme.fg-muted; font-size: 11px; }
+                            HorizontalLayout {
+                                spacing: 6px;
+                                Field {
+                                    value: Craft.form-api-key;
+                                    placeholder: "sk-... / AIza...";
+                                    secret: !Craft.show-api-key;
+                                    technical: true;
+                                    edited(val) => { Craft.form-api-key = val; }
+                                }
+                                Rectangle {
+                                    width: 34px;
+                                    height: 28px;
+                                    border-radius: 6px;
+                                    background: eye-t.has-hover ? Theme.field-hover : Theme.field;
+
+                                    Text {
+                                        x: (parent.width - self.width) / 2;
+                                        y: (parent.height - self.height) / 2;
+                                        text: Craft.show-api-key ? "🔒" : "👁";
+                                        font-size: 12px;
+                                    }
+
+                                    eye-t := TouchArea {
+                                        mouse-cursor: pointer;
+                                        clicked => { Craft.show-api-key = !Craft.show-api-key; }
+                                    }
+                                }
+                            }
+                        }
+
+                        VerticalLayout {
+                            spacing: 3px;
+                            Text { text: "Model ID"; color: Theme.fg-muted; font-size: 11px; }
+                            Field {
+                                value: Craft.form-model-id;
+                                placeholder: "e.g. gemini-2.5-flash, gpt-4o, claude-3-7-sonnet-latest";
+                                technical: true;
+                                edited(val) => { Craft.form-model-id = val; }
+                            }
+                        }
+                    }
+
+                    // Test Status Banner
+                    if Craft.test-status != "": Rectangle {
+                        height: 32px;
+                        border-radius: 7px;
+                        border-width: 1px;
+                        border-color: Craft.test-ok ? #22c55e88 : (Craft.test-error ? Theme.danger : Theme.line-strong);
+                        background: Craft.test-ok ? #22c55e22 : (Craft.test-error ? Theme.danger-soft : Theme.well);
+
+                        Text {
+                            x: 10px;
+                            y: (parent.height - self.height) / 2;
+                            width: parent.width - 20px;
+                            text: Craft.test-status;
+                            color: Craft.test-ok ? #4ade80 : (Craft.test-error ? Theme.danger : Theme.fg);
+                            font-size: 11px;
+                            overflow: elide;
+                        }
+                    }
+
+                    // Action Buttons Row (Test Connection & Save)
+                    HorizontalLayout {
+                        spacing: 10px;
+
+                        Rectangle {
+                            height: 34px;
+                            horizontal-stretch: 1;
+                            border-radius: 8px;
+                            border-width: 1px;
+                            border-color: tst-t.has-hover ? Theme.accent : Theme.line-strong;
+                            background: tst-t.has-hover ? Theme.field-hover : Theme.field;
+
+                            Text {
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                                text: "🔌 Test Connection";
+                                color: Theme.fg;
+                                font-size: 12px;
+                                font-weight: 600;
+                            }
+
+                            tst-t := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => { Craft.test-connection(); }
+                            }
+                        }
+
+                        Rectangle {
+                            height: 34px;
+                            horizontal-stretch: 1;
+                            border-radius: 8px;
+                            background: sv-t.has-hover ? Theme.accent-hover : Theme.accent;
+
+                            Text {
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                                text: "💾 Save & Activate";
+                                color: Theme.on-accent;
+                                font-size: 12px;
+                                font-weight: 700;
+                            }
+
+                            sv-t := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => { Craft.save-model(); }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── 6. UNIFIED 28PX BOTTOM FOOTER WITH THEME DROPDOWN ───────────────────────
+export component CraftFooter inherits Rectangle {
+    height: 28px;
+    background: Theme.page;
+
+    // Top border: 2px Gemini Rainbow Gradient in Aurora Mode, 1px hairline otherwise
+    Rectangle {
+        y: 0;
+        height: Theme.is-aurora ? 2px : 1px;
+        background: Theme.is-aurora
+            ? @linear-gradient(90deg, #38bdf8 0%, #4285f4 25%, #a855f7 50%, #ec4899 75%, #fb923c 100%)
+            : Theme.line;
+    }
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 12px;
+
+        VerticalLayout {
+            alignment: center;
+            Text {
+                text: "CutCraft Studio  ·  ArtCraft Video & Timeline Suite";
+                color: Theme.fg-muted;
+                font-size: 11px;
+            }
+        }
+
+        if Craft.status-toast != "": VerticalLayout {
+            alignment: center;
+            Text {
+                text: "⚡ " + Craft.status-toast;
+                color: Theme.accent;
+                font-size: 11px;
+                font-weight: 600;
+            }
+        }
+
+        Rectangle { horizontal-stretch: 1; }
+
+        // Unified Theme Dropdown Button on bottom-right
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: thm-lbl.preferred-width + 20px;
+                height: 22px;
+                border-radius: 6px;
+                border-width: 1px;
+                border-color: thm-touch.has-hover ? Theme.accent : Theme.line-strong;
+                background: thm-touch.has-hover ? Theme.field-hover : Theme.field;
+
+                thm-lbl := Text {
+                    x: 10px;
+                    y: (parent.height - self.height) / 2;
+                    text: (Theme.theme-mode == 0 ? "✨ Aurora" : (Theme.theme-mode == 1 ? "🌙 Dark" : "☀️ Light")) + " ▾";
+                    color: Theme.fg;
+                    font-size: 11px;
+                    font-weight: 500;
+                }
+
+                thm-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        Craft.footer-theme-open = !Craft.footer-theme-open;
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component FooterThemePopover inherits Rectangle {
+    visible: Craft.footer-theme-open;
+    background: Colors.transparent;
+
+    TouchArea {
+        clicked => { Craft.footer-theme-open = false; }
+    }
+
+    Rectangle {
+        x: parent.width - self.width - 12px;
+        y: parent.height - self.height - 32px;
+        width: 150px;
+        height: 102px;
+        border-radius: 8px;
+        border-width: 1px;
+        border-color: Theme.accent;
+        background: Theme.raised;
+
+        VerticalLayout {
+            padding: 6px;
+            spacing: 3px;
+
+            for item[idx] in ["✨ Aurora", "🌙 Dark", "☀️ Light"]: Rectangle {
+                height: 28px;
+                border-radius: 5px;
+                background: Theme.theme-mode == idx ? Theme.accent-soft : (opt-t.has-hover ? Theme.field-hover : Colors.transparent);
+
+                Text {
+                    x: 10px;
+                    y: (parent.height - self.height) / 2;
+                    text: (Theme.theme-mode == idx ? "✓  " : "     ") + item;
+                    color: Theme.theme-mode == idx ? Theme.accent : Theme.fg;
+                    font-size: 11.5px;
+                    font-weight: Theme.theme-mode == idx ? 700 : 400;
+                }
+
+                opt-t := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        Craft.footer-theme-open = false;
+                        Craft.select-theme(idx);
+                    }
+                }
+            }
+        }
+    }
+}

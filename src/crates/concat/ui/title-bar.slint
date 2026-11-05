@@ -1,0 +1,510 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-FileCopyrightText: 2026 Jareer Abdullah and Concat contributors
+
+import { I18n } from "i18n.slint";
+import { Theme } from "theme/theme.slint";
+import { Glyph, Icon } from "icons.slint";
+import { AddPaneButton, PaneKind } from "workspace/pane-switcher.slint";
+import { Craft } from "craft.slint";
+
+component WindowButton inherits Rectangle {
+    in property <Glyph> glyph;
+    in property <bool> danger;
+
+    callback clicked();
+
+    width: 46px;
+    background: touch.has-hover
+        ? (root.danger ? Theme.danger : Theme.field)
+        : Colors.transparent;
+
+    animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+    Icon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        glyph: root.glyph;
+        size: 12px;
+        weight: 1.6;
+        tint: touch.has-hover
+            ? (root.danger ? Theme.on-scrim : Theme.fg)
+            : Theme.fg-muted;
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+component MenuLabel inherits Rectangle {
+    in property <string> label;
+    in property <bool> current;
+
+    callback clicked();
+
+    width: text.preferred-width + 16px;
+    border-radius: Theme.r-sm;
+    background: (root.current || touch.has-hover) ? Theme.field : Colors.transparent;
+
+    animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+    text := Text {
+        x: 8px;
+        y: (parent.height - self.height) / 2;
+        text: root.label;
+        color: (root.current || touch.has-hover) ? Theme.fg : Theme.fg-muted;
+        font-size: Theme.fs;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+component HeaderIconButton inherits Rectangle {
+    in property <Glyph> glyph;
+
+    callback clicked();
+
+    width: 24px;
+    height: 24px;
+    border-radius: Theme.r-sm;
+    background: touch.has-hover ? Theme.field : Colors.transparent;
+
+    animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+    Icon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        glyph: root.glyph;
+        size: 14px;
+        tint: touch.has-hover ? Theme.fg : Theme.fg-muted;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+component TopBarButton inherits Rectangle {
+    in property <string> icon-text;
+    in property <string> tip;
+    callback clicked();
+
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: touch.has-hover ? Theme.field : Colors.transparent;
+
+    animate background { duration: 100ms; }
+
+    Text {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        text: root.icon-text;
+        font-size: 13px;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component TitleBar inherits Rectangle {
+    in property <string> project-name: I18n.t("common.untitledProject");
+    in property <string> status: I18n.t("common.saved");
+    in property <bool> macos: true;
+    in property <bool> minimal;
+    in property <bool> deep;
+    in property <bool> own-buttons;
+    in property <bool> maximized;
+
+    callback begin-drag();
+    callback toggle-maximize();
+    callback minimize();
+    callback close();
+    callback menu-opened(index: int, at-x: length, keyboard: bool);
+    in property <int> menu: -1;
+    in property <int> keyboard-menu: -1;
+    in property <int> keyboard-token;
+    callback open-settings();
+    callback add-pane(kind: PaneKind);
+    callback export-clicked();
+    callback go-home();
+    callback save-clicked();
+    callback undo-clicked();
+    callback redo-clicked();
+
+    height: 40px;
+    background: root.deep ? Theme.launch-page : Theme.page;
+
+    property <bool> drag-armed: false;
+    property <length> press-x: 0px;
+    property <length> press-y: 0px;
+
+    drag := TouchArea {
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down
+                && event.button == PointerEventButton.left) {
+                root.drag-armed = true;
+                root.press-x = self.mouse-x;
+                root.press-y = self.mouse-y;
+            } else if (event.kind == PointerEventKind.up
+                || event.kind == PointerEventKind.cancel) {
+                root.drag-armed = false;
+            }
+        }
+        moved => {
+            if (root.drag-armed && self.pressed) {
+                if (Math.abs(self.mouse-x - root.press-x) > 4px
+                    || Math.abs(self.mouse-y - root.press-y) > 4px) {
+                    root.drag-armed = false;
+                    root.begin-drag();
+                }
+            }
+        }
+        double-clicked => {
+            root.drag-armed = false;
+            root.toggle-maximize();
+        }
+    }
+
+    HorizontalLayout {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        padding-left: root.macos ? 80px : 8px;
+        padding-right: root.own-buttons ? 0px : 8px;
+        spacing: 4px;
+
+        // Zone 1: Left (Brand / Home, Save, Undo, Redo 28x28px)
+        VerticalLayout {
+            alignment: center;
+            padding-right: 6px;
+            Text {
+                text: "CutCraft";
+                color: Theme.fg;
+                font-size: 13.5px;
+                font-weight: 700;
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            TopBarButton {
+                icon-text: "🏠";
+                tip: "Home / Overview";
+                clicked => { root.go-home(); }
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            TopBarButton {
+                icon-text: "💾";
+                tip: "Save";
+                clicked => { root.save-clicked(); }
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            TopBarButton {
+                icon-text: "↩️";
+                tip: "Undo";
+                clicked => { root.undo-clicked(); }
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            TopBarButton {
+                icon-text: "↪️";
+                tip: "Redo";
+                clicked => { root.redo-clicked(); }
+            }
+        }
+
+        if !root.minimal: file := MenuLabel {
+            label: I18n.t("titleBar.file");
+            current: root.menu == 0;
+            clicked => {
+                root.menu-opened(0, file.absolute-position.x - root.absolute-position.x, false);
+            }
+            property <int> asked: root.keyboard-token;
+            changed asked => {
+                if (root.keyboard-menu == 0) {
+                    root.menu-opened(0, file.absolute-position.x - root.absolute-position.x, true);
+                }
+            }
+        }
+        if !root.minimal: edit := MenuLabel {
+            label: I18n.t("titleBar.edit");
+            current: root.menu == 1;
+            clicked => {
+                root.menu-opened(1, edit.absolute-position.x - root.absolute-position.x, false);
+            }
+            property <int> asked: root.keyboard-token;
+            changed asked => {
+                if (root.keyboard-menu == 1) {
+                    root.menu-opened(1, edit.absolute-position.x - root.absolute-position.x, true);
+                }
+            }
+        }
+        if !root.minimal: view := MenuLabel {
+            label: I18n.t("titleBar.view");
+            current: root.menu == 2;
+            clicked => {
+                root.menu-opened(2, view.absolute-position.x - root.absolute-position.x, false);
+            }
+            property <int> asked: root.keyboard-token;
+            changed asked => {
+                if (root.keyboard-menu == 2) {
+                    root.menu-opened(2, view.absolute-position.x - root.absolute-position.x, true);
+                }
+            }
+        }
+
+        Rectangle { horizontal-stretch: 1; }
+
+        // Zone 2: Center - Title & Search Field (220x28px)
+        HorizontalLayout {
+            spacing: 12px;
+            alignment: center;
+            VerticalLayout {
+                alignment: center;
+                Text {
+                    text: root.project-name;
+                    color: Theme.fg;
+                    font-size: 13px;
+                    font-weight: 600;
+                    overflow: elide;
+                }
+            }
+            VerticalLayout {
+                alignment: center;
+                search-box := Rectangle {
+                    width: 240px;
+                    height: 28px;
+                    border-radius: 6px;
+                    border-width: 1px;
+                    border-color: search-touch.has-hover ? Theme.accent : Theme.line;
+                    background: search-touch.has-hover ? Theme.field-hover : Theme.field;
+
+                    animate border-color { duration: 120ms; }
+                    animate background { duration: 120ms; }
+
+                    HorizontalLayout {
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        spacing: 6px;
+                        Text {
+                            text: "🔍";
+                            font-size: 11px;
+                            vertical-alignment: center;
+                        }
+                        Text {
+                            text: "Search commands & actions...";
+                            color: search-touch.has-hover ? Theme.fg : Theme.fg-dim;
+                            font-size: 11.5px;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    search-touch := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            root.open-settings();
+                        }
+                    }
+                }
+            }
+        }
+
+        Rectangle { horizontal-stretch: 1; }
+
+        if !root.minimal: VerticalLayout {
+            alignment: center;
+            AddPaneButton {
+                added(kind) => { root.add-pane(kind); }
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            HeaderIconButton {
+                glyph: Glyph.settings;
+                clicked => { root.open-settings(); }
+            }
+        }
+
+        if !root.minimal: VerticalLayout {
+            alignment: center;
+            padding-left: 2px;
+            padding-right: 4px;
+
+            export-button := Rectangle {
+                width: label.width + icon.width + 24px;
+                height: 28px;
+                border-radius: 6px;
+                background: export-touch.has-hover ? Theme.accent-hover : Theme.accent;
+
+                animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+                icon := Icon {
+                    x: 8px;
+                    y: (parent.height - self.height) / 2;
+                    glyph: Glyph.export;
+                    size: 12px;
+                    tint: Theme.on-accent;
+                }
+
+                label := Text {
+                    x: icon.x + icon.width + 5px;
+                    y: (parent.height - self.height) / 2;
+                    text: I18n.t("common.export");
+                    color: Theme.on-accent;
+                    font-size: Theme.fs;
+                    font-weight: Theme.weight-title;
+                }
+
+                export-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { root.export-clicked(); }
+                }
+            }
+        }
+
+        // ── UNIFIED ARTCRAFT TOP-RIGHT ACTION BAR ──────────────────────────
+        // Zone 3: Right Suite Action Bar (strict 28px height, 8px gap)
+        // 1. ✓ Auto-Save
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: as-txt.preferred-width + 20px;
+                height: 28px;
+                border-radius: 6px;
+                border-width: 1px;
+                border-color: as-touch.has-hover ? Theme.line-strong : Theme.line;
+                background: as-touch.has-hover ? Theme.field-hover : Theme.field;
+
+                as-txt := Text {
+                    x: 10px;
+                    y: (parent.height - self.height) / 2;
+                    text: Craft.auto-save ? "✓ Auto-Save" : "○ Auto-Save";
+                    color: Craft.auto-save ? Theme.fg-muted : Theme.fg-dim;
+                    font-size: 12px;
+                }
+
+                as-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { Craft.toggle-auto-save(); }
+                }
+            }
+        }
+
+        // 2. ● Google Drive: Active (G:)
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: gd-row.preferred-width + 20px;
+                height: 28px;
+                border-radius: 6px;
+                border-width: 1px;
+                border-color: gd-touch.has-hover ? #22c55e88 : Theme.line;
+                background: gd-touch.has-hover ? Theme.field-hover : Theme.field;
+
+                gd-row := HorizontalLayout {
+                    x: 10px;
+                    y: 0;
+                    height: parent.height;
+                    spacing: 6px;
+
+                    VerticalLayout {
+                        alignment: center;
+                        Rectangle {
+                            width: 8px;
+                            height: 8px;
+                            border-radius: 4px;
+                            background: Craft.drive-active ? #22c55e : #f59e0b;
+                        }
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+                        Text {
+                            text: Craft.drive-label;
+                            color: Theme.fg-muted;
+                            font-size: 12px;
+                        }
+                    }
+                }
+
+                gd-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { Craft.open-drive-folder(); }
+                }
+            }
+        }
+
+        // 3. ✨ AI Agent Pill Button (height 28px, radius 14px, padding 0 14px, 12.5px font-weight 500)
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: ai-lbl.preferred-width + 28px;
+                height: 28px;
+                border-radius: 14px;
+                border-width: 1px;
+                border-color: Craft.ai-open ? #c084fc : (ai-touch.has-hover ? Theme.accent : Theme.line-strong);
+                background: Craft.ai-open
+                    ? @linear-gradient(90deg, #38bdf8 0%, #8b5cf6 50%, #ec4899 100%)
+                    : (ai-touch.has-hover ? Theme.field-hover : Theme.field);
+
+                ai-lbl := Text {
+                    x: 14px;
+                    y: (parent.height - self.height) / 2;
+                    text: "✨ AI Agent";
+                    color: Craft.ai-open ? #ffffff : Theme.fg;
+                    font-size: 12.5px;
+                    font-weight: 500;
+                }
+
+                ai-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { Craft.toggle-ai(); }
+                }
+            }
+        }
+
+        if root.own-buttons: Rectangle { width: 6px; }
+        if root.own-buttons: HorizontalLayout {
+            spacing: 0px;
+            WindowButton {
+                glyph: Glyph.minus;
+                clicked => { root.minimize(); }
+            }
+            WindowButton {
+                glyph: root.maximized ? Glyph.copy : Glyph.maximize;
+                clicked => { root.toggle-maximize(); }
+            }
+            WindowButton {
+                glyph: Glyph.close;
+                danger: true;
+                clicked => { root.close(); }
+            }
+        }
+    }
+
+    // Bottom 2px Gemini Aurora Rainbow Gradient Bar when Aurora mode is active
+    if Theme.is-aurora: Rectangle {
+        x: 0;
+        y: parent.height - 2px;
+        width: parent.width;
+        height: 2px;
+        background: @linear-gradient(90deg, #38bdf8 0%, #4285f4 25%, #a855f7 50%, #ec4899 75%, #fb923c 100%);
+    }
+}

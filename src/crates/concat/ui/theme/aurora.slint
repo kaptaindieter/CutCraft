@@ -1,0 +1,109 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// ArtCraft Suite — Gemini Aurora Palette for CutCraft
+
+import { Accent } from "accent.slint";
+
+export global Aurora {
+    // Deep cosmic indigo / violet-tinted surfaces (1:1 Craft Suite Aurora theme)
+    out property <color> panel: #0f1322;
+    out property <color> raised: #161b30;
+    out property <color> well: #090b14;
+    out property <color> field: #161b30;
+    out property <color> field-hover: #1e2440;
+    out property <color> field-active: #283056;
+
+    // Launch screen surfaces — deep Gemini space backdrop
+    out property <color> launch-page: #090b14;
+    out property <color> launch-panel: #0f1322;
+    out property <color> launch-well: #090b14;
+    out property <color> launch-raised: #161b30;
+    out property <color> launch-field: #161b30;
+    out property <color> launch-field-active: #283056;
+
+    // Iridescent violet/cyan hairlines
+    out property <color> line: #8b5cf638;
+    out property <color> line-strong: #38bdf866;
+
+    // Crisp luminous starlight typography
+    out property <color> fg: #f1f3f9;
+    out property <color> fg-muted: #94a3b8;
+    out property <color> fg-dim: #64748b;
+    out property <color> fg-hot: #ffffff;
+
+    // Gemini Aurora accents (index 0 = Gemini Violet/Magenta default in Aurora mode)
+    out property <[Accent]> accents: [
+        { accent: #a855f7, hover: #c084fc, soft: #a855f738, on: #ffffff },   // gemini violet (default slot 0 in Aurora)
+        { accent: #38bdf8, hover: #7dd3fc, soft: #38bdf838, on: #041829 },   // sky cyan
+        { accent: #ec4899, hover: #f472b6, soft: #ec489938, on: #ffffff },   // aurora rose
+        { accent: #cbf53f, hover: #d9ff63, soft: #cbf53f33, on: #15220a },   // lime
+        { accent: #fb923c, hover: #fdba74, soft: #fb923c38, on: #2b1200 },   // amber
+        { accent: #2dd4bf, hover: #5eead4, soft: #2dd4bf38, on: #04241e },   // mint
+    ];
+    out property <color> green: #22c55e;
+    out property <color> on-green: #05210e;
+
+    out property <color> grip: #e2e8f8;
+    out property <color> grip-active: #ffffff;
+    out property <color> grip-edge: #05081499;
+
+    // Meter ramp
+    out property <color> meter-low: #22c55e;
+    out property <color> meter-mid: #facc15;
+    out property <color> meter-high: #f43f5e;
+
+    // Media kinds
+    out property <color> kind-video: #3b82f6;
+    out property <color> kind-video-well: #132547;
+    out property <color> kind-audio: #10b981;
+    out property <color> kind-audio-well: #0e2e24;
+    out property <color> kind-image: #a855f7;
+    out property <color> kind-image-well: #2b1942;
+    out property <color> kind-text: #ec4899;
+    out property <color> kind-text-well: #381830;
+    out property <color> kind-filter: #6366f1;
+    out property <color> kind-filter-well: #1f204d;
+    out property <color> kind-shape: #f59e0b;
+    out property <color> kind-shape-well: #3b2810;
+    out property <color> kind-sound-layer: #14b8a6;
+    out property <color> kind-sound-layer-well: #0f2f2e;
+
+    // Timeline lanes & ruler
+    out property <color> lane: #101629;
+    out property <color> lane-alt: #141c34;
+    out property <color> ruler: #0c1121;
+    out property <color> grid: #a855f729;
+    out property <color> playhead: #38bdf8;
+    out property <color> wave: #6ee7b7b3;
+    out property <color> wave-video: #7dd3fcb3;
+    out property <color> wave-hot: #fb923cd9;
+
+    // Clip ink
+    out property <color> clip-ink: #ffffff;
+    out property <color> clip-body: #fde68ab8;
+    out property <color> clip-chip: #06091459;
+    out property <color> wave-centre: #e0e7ff33;
+    out property <color> fade-shade: #06091480;
+    out property <color> fade-edge: #38bdf8bf;
+    out property <color> transition-in: #c084fccc;
+    out property <color> transition-out: #38bdf880;
+
+    // Monitor
+    out property <color> stage: #04060c;
+    out property <color> on-stage-dim: #a6b4d480;
+    out property <color> sample-ground: #232e52;
+
+    // Overlays
+    out property <color> overlay: #050814b3;
+    out property <color> scrim: #090d1a99;
+    out property <color> on-scrim: #ffffff;
+
+    // Destructive
+    out property <color> danger: #f43f5e;
+    out property <color> danger-soft: #f43f5e29;
+    out property <color> danger-wash: #2e1220;
+    out property <color> danger-edge: #6b213b;
+
+    // Window ground
+    out property <color> page: #090b14;
+    out property <color> page-fg-muted: #94a3c8;
+}
